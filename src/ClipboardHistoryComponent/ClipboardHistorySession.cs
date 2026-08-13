@@ -86,9 +86,11 @@ public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
             _debounceCts?.Dispose();
             _debounceCts = null;
         }
-        lifetime?.Cancel();
+        // Do not cancel an in-flight atomic save. Stop accepting new history events,
+        // then wait for the current read/write operation to leave the gate.
         await _gate.WaitAsync().ConfigureAwait(false);
         _gate.Release();
+        lifetime?.Cancel();
         lifetime?.Dispose();
         _lifetimeCts = null;
     }
@@ -96,7 +98,8 @@ public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
     public async Task RefreshAsync()
     {
         CancellationToken token = _lifetimeCts?.Token ?? CancellationToken.None;
-        await _gate.WaitAsync(token).ConfigureAwait(false);
+        try { await _gate.WaitAsync(token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
         try
         {
             ClipboardHistoryReadResult result = await _adapter.ReadAsync(token).ConfigureAwait(false);
