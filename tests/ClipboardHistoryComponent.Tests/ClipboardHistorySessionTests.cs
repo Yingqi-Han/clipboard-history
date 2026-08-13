@@ -13,7 +13,8 @@ public sealed class ClipboardHistorySessionTests
             new(ClipboardEntryKind.Image, DateTimeOffset.UtcNow, PngBytes: [1, 2, 3])
         ]);
         MemoryStore store = new();
-        await using ClipboardHistorySession session = NewSession(adapter, store);
+        await using ClipboardHistorySession session = new(
+            new ClipboardHistoryOptions { DataDirectory = "unused" }, adapter, store);
 
         await session.StartAsync();
 
@@ -137,6 +138,26 @@ public sealed class ClipboardHistorySessionTests
         Assert.Equal("arrived", session.Entries[0].Text);
     }
 
+    [Fact]
+    public async Task StopDuringStart_WaitsForLoadAndDoesNotReadWinVAfterShutdown()
+    {
+        BlockingStore store = new();
+        FakeAdapter adapter = new([new(ClipboardEntryKind.Text, DateTimeOffset.UtcNow, Text: "must not import")]);
+        await using ClipboardHistorySession session = new(
+            new ClipboardHistoryOptions { DataDirectory = "unused" }, adapter, store);
+
+        Task start = session.StartAsync();
+        await store.LoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Task stop = session.StopAsync();
+        Assert.False(stop.IsCompleted);
+        store.AllowLoad.TrySetResult();
+
+        await Task.WhenAll(start, stop).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(0, adapter.ReadCount);
+        Assert.Empty(session.Entries);
+    }
+
     private static ClipboardHistorySession NewSession(FakeAdapter adapter, MemoryStore store) => new(
         new ClipboardHistoryOptions { DataDirectory = "unused" }, adapter, store);
 
@@ -153,8 +174,14 @@ public sealed class ClipboardHistorySessionTests
         public IReadOnlyList<ClipboardImportItem> Items { get; set; } = items;
         public ClipboardSyncState State { get; set; } = ClipboardSyncState.Ready;
         public ClipboardHistoryEntry? LastWritten { get; private set; }
+        public int ReadCount { get; private set; }
         public Task<ClipboardHistoryReadResult> ReadAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new ClipboardHistoryReadResult(State, Items));
+            Task.FromResult(Read());
+        private ClipboardHistoryReadResult Read()
+        {
+            ReadCount++;
+            return new ClipboardHistoryReadResult(State, Items);
+        }
         public Task<bool> WriteAsync(ClipboardHistoryEntry entry, CancellationToken cancellationToken)
         {
             LastWritten = entry;
@@ -180,5 +207,21 @@ public sealed class ClipboardHistorySessionTests
         public Task<byte[]?> ReadImageAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Entries.FirstOrDefault(value => value.Id == id)?.PngBytes);
         public long GetStorageBytes() => Entries.Sum(entry => entry.ContentBytes);
+    }
+
+    private sealed class BlockingStore : IClipboardHistoryStore
+    {
+        public TaskCompletionSource LoadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllowLoad { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<IReadOnlyList<ClipboardHistoryStoreItem>> LoadAsync(CancellationToken cancellationToken)
+        {
+            LoadStarted.TrySetResult();
+            await AllowLoad.Task.ConfigureAwait(false);
+            return [];
+        }
+        public Task SaveAsync(IReadOnlyList<ClipboardHistoryStoreItem> entries, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<string?> ReadTextAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public Task<byte[]?> ReadImageAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
+        public long GetStorageBytes() => 0;
     }
 }

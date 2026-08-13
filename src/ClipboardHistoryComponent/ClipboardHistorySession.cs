@@ -46,6 +46,7 @@ public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
 
     public async Task StartAsync()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_started) return;
         _started = true;
         _lifetimeCts = new CancellationTokenSource();
@@ -70,6 +71,7 @@ public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
         {
             _gate.Release();
         }
+        if (!_started) return;
         RaiseEntriesChanged();
         await RefreshAsync().ConfigureAwait(false);
     }
@@ -97,11 +99,13 @@ public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
 
     public async Task RefreshAsync()
     {
+        if (!_started) return;
         CancellationToken token = _lifetimeCts?.Token ?? CancellationToken.None;
         try { await _gate.WaitAsync(token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
         try
         {
+            if (!_started) return;
             ClipboardHistoryReadResult result = await _adapter.ReadAsync(token).ConfigureAwait(false);
             SetState(result.State, result.Error);
             if (result.State != ClipboardSyncState.Ready) return;
