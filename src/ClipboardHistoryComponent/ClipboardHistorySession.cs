@@ -3,7 +3,7 @@ using System.Text;
 
 namespace YingqiClipboard;
 
-public sealed class ClipboardHistorySession : IAsyncDisposable
+public sealed class ClipboardHistorySession : IDisposable, IAsyncDisposable
 {
     private readonly ClipboardHistoryOptions _options;
     private readonly IWindowsClipboardHistoryAdapter _adapter;
@@ -14,6 +14,7 @@ public sealed class ClipboardHistorySession : IAsyncDisposable
     private CancellationTokenSource? _lifetimeCts;
     private CancellationTokenSource? _debounceCts;
     private bool _started;
+    private bool _disposed;
 
     public ClipboardHistorySession(ClipboardHistoryOptions options)
         : this(options, new WindowsClipboardHistoryAdapter(), new EncryptedClipboardHistoryStore(options.DataDirectory))
@@ -179,10 +180,14 @@ public sealed class ClipboardHistorySession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
         await StopAsync().ConfigureAwait(false);
         _adapter.Dispose();
         _gate.Dispose();
     }
+
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     private bool Import(ClipboardImportItem item)
     {
@@ -204,6 +209,7 @@ public sealed class ClipboardHistorySession : IAsyncDisposable
         DateTimeOffset timestamp = item.Timestamp == default ? DateTimeOffset.UtcNow : item.Timestamp;
         if (duplicate is not null)
         {
+            if (timestamp <= duplicate.UpdatedAt) return false;
             _entries.Remove(duplicate);
             _entries.Insert(0, duplicate with { UpdatedAt = timestamp });
             return true;

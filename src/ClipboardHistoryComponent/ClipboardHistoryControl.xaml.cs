@@ -49,7 +49,11 @@ public partial class ClipboardHistoryControl : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        // The shared session keeps syncing while the application is minimized or another page is open.
+        if (!_loaded) return;
+        _session.EntriesChanged -= Session_EntriesChanged;
+        _session.StateChanged -= Session_StateChanged;
+        _loaded = false;
+        // The shared session itself keeps syncing while another page is open.
     }
 
     private void Session_EntriesChanged(object? sender, ClipboardEntriesChangedEventArgs e) =>
@@ -144,7 +148,11 @@ public partial class ClipboardHistoryControl : UserControl
         {
             if (_thumbnails.ContainsKey(item.Id)) continue;
             byte[]? png = await _session.LoadImageAsync(item.Id);
-            if (png is null) continue;
+            if (png is null)
+            {
+                await _session.DeleteAsync(item.Id);
+                continue;
+            }
             using MemoryStream stream = new(png);
             BitmapImage image = new();
             image.BeginInit();

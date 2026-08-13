@@ -42,6 +42,21 @@ public sealed class ClipboardHistorySessionTests
     }
 
     [Fact]
+    public async Task UnchangedWinVSnapshot_DoesNotRewriteStore()
+    {
+        DateTimeOffset timestamp = DateTimeOffset.UtcNow;
+        FakeAdapter adapter = new([new(ClipboardEntryKind.Text, timestamp, Text: "stable")]);
+        MemoryStore store = new();
+        await using ClipboardHistorySession session = NewSession(adapter, store);
+        await session.StartAsync();
+        int saves = store.SaveCount;
+
+        await session.RefreshAsync();
+
+        Assert.Equal(saves, store.SaveCount);
+    }
+
+    [Fact]
     public async Task SensitiveText_IsNeverStored()
     {
         string token = "ghp_abcdefghijklmnopqrstuvwxyzABCDE1234567890";
@@ -152,9 +167,11 @@ public sealed class ClipboardHistorySessionTests
     private sealed class MemoryStore : IClipboardHistoryStore
     {
         public IReadOnlyList<ClipboardHistoryStoreItem> Entries { get; set; } = [];
+        public int SaveCount { get; private set; }
         public Task<IReadOnlyList<ClipboardHistoryStoreItem>> LoadAsync(CancellationToken cancellationToken) => Task.FromResult(Entries);
         public Task SaveAsync(IReadOnlyList<ClipboardHistoryStoreItem> entries, CancellationToken cancellationToken)
         {
+            SaveCount++;
             Entries = entries.ToArray();
             return Task.CompletedTask;
         }
