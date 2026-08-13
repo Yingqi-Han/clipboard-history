@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/ClipboardHistoryComponent/ClipboardHistoryComponent.csproj" />
+  <Project Path="tests/ClipboardHistoryComponent.Tests/ClipboardHistoryComponent.Tests.csproj" />
+</Solution>
