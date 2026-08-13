@@ -71,7 +71,7 @@
                 </StackPanel>
                 <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0" FontSize="12"
                     Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                  <Run Text="{Binding DisplayTime}"/><Run Text="  ·  "/><Run Text="{Binding DisplaySize}"/>
+                  <Run Text="{Binding DisplayTime, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding DisplaySize, Mode=OneWay}"/>
                 </TextBlock>
               </Grid>
             </ui:Card>
