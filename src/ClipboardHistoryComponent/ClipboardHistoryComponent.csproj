@@ -5,11 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ClipboardHistoryComponent</AssemblyName>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WPF-UI" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" NoWarn="NU1510" />
   </ItemGroup>
 </Project>
