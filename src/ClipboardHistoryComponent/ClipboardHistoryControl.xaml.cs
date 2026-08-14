@@ -25,9 +25,23 @@ public partial class ClipboardHistoryControl : UserControl
         _displayMode = displayMode;
         if (displayMode == ClipboardHistoryDisplayMode.CompactWindow)
         {
-            PageTitle.FontSize = 24;
-            PageTitle.Text = "剪贴板历史";
-            OpenCompactButton.Visibility = Visibility.Collapsed;
+            HeaderSection.Visibility = Visibility.Collapsed;
+            ManagementBar.Visibility = Visibility.Collapsed;
+            ManagementRow.Height = new GridLength(0);
+            CommandCard.Margin = new Thickness(0, 0, 0, 10);
+            CommandCard.Padding = new Thickness(12);
+            SearchBox.Margin = new Thickness(0, 0, 10, 0);
+            RootLayout.Margin = new Thickness(0, 0, 0, 12);
+            Resources["CompactDeleteVisibility"] = Visibility.Collapsed;
+            Resources["EntryCardPadding"] = new Thickness(10);
+            Resources["EntryItemMargin"] = new Thickness(0, 0, 0, 6);
+            Resources["EntryActionMargin"] = new Thickness(8, 0, 0, 0);
+            Resources["EntryMetadataMargin"] = new Thickness(0, 6, 0, 0);
+            Resources["EntryTextFontSize"] = 12d;
+            Resources["EntryMetadataFontSize"] = 10.5d;
+            Resources["EntryTextMaxHeight"] = 58d;
+            Resources["EntryImageMaxHeight"] = 112d;
+            Resources["EntryButtonHeight"] = 30d;
         }
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -133,6 +147,26 @@ public partial class ClipboardHistoryControl : UserControl
         if (HistoryList.SelectedItem is ClipboardEntryViewModel item) await CopyAsync(item);
     }
 
+    private void HistoryList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        e.Handled = ScrollByWheelDelta(e.Delta);
+    }
+
+    public bool ScrollByWheelDelta(int delta)
+    {
+        if (FindDescendant<ScrollViewer>(HistoryList) is not { ScrollableHeight: > 0 } scrollViewer) return false;
+        double previousOffset = scrollViewer.VerticalOffset;
+        int notches = Math.Max(1, Math.Abs(delta) / 120);
+        int linesPerNotch = _displayMode == ClipboardHistoryDisplayMode.CompactWindow ? 2 : 1;
+        for (int line = 0; line < notches * linesPerNotch; line++)
+        {
+            if (delta < 0) scrollViewer.LineDown();
+            else scrollViewer.LineUp();
+        }
+        scrollViewer.UpdateLayout();
+        return !scrollViewer.VerticalOffset.Equals(previousOffset);
+    }
+
     private async Task CopyAsync(ClipboardEntryViewModel item)
     {
         bool copied = await _session.CopyAsync(item.Id);
@@ -170,4 +204,15 @@ public partial class ClipboardHistoryControl : UserControl
     private static string FormatBytes(long value) => value < 1024 * 1024
         ? $"{value / 1024d:0.#} KB"
         : $"{value / 1024d / 1024d:0.#} MB";
+
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
 }

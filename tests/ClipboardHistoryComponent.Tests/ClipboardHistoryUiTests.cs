@@ -28,6 +28,38 @@ public sealed class ClipboardHistoryUiTests
     }
 
     [Fact]
+    public void FullPage_ConstrainedHeightScrollsFromInsideTextEntryAtModerateSpeed()
+    {
+        RunOnSta((session, adapter) =>
+        {
+            adapter.Items = Enumerable.Range(0, 30)
+                .Select(index => new ClipboardImportItem(
+                    ClipboardEntryKind.Text,
+                    DateTimeOffset.UtcNow.AddSeconds(index + 1),
+                    Text: $"scroll entry {index:D2}"))
+                .ToArray();
+            session.RefreshAsync().GetAwaiter().GetResult();
+            Assert.True(session.Count >= 30);
+            ClipboardHistoryControl control = new(session) { Height = 600 };
+            Window window = CreateHost(control, 900, 600);
+
+            window.Show();
+            PumpDispatcher();
+            typeof(ClipboardHistoryControl)
+                .GetMethod("RefreshView", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(control, null);
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            ScrollViewer scroll = FindDescendant<ScrollViewer>(Assert.IsType<ListBox>(control.FindName("HistoryList")))!;
+            Assert.True(scroll.ScrollableHeight > 0, $"ScrollableHeight={scroll.ScrollableHeight}, ExtentHeight={scroll.ExtentHeight}, ViewportHeight={scroll.ViewportHeight}");
+            Assert.True(control.ScrollByWheelDelta(-120));
+            Assert.Equal(1, scroll.VerticalOffset);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public void CompactWindow_KeepsStandardButtonsAndStaysOpenAfterDoubleClickCopy()
     {
         RunOnSta((session, adapter) =>
@@ -42,9 +74,13 @@ public sealed class ClipboardHistoryUiTests
             Assert.True(titleBar.ShowMaximize);
             Assert.True(titleBar.ShowClose);
             Assert.True(window.Topmost);
+            Assert.Equal(400, window.Width);
+            Assert.Equal(540, window.Height);
 
             ContentPresenter controlHost = Assert.IsType<ContentPresenter>(window.FindName("ControlHost"));
             ClipboardHistoryControl control = Assert.IsType<ClipboardHistoryControl>(controlHost.Content);
+            Assert.Equal(Visibility.Collapsed, Assert.IsType<Grid>(control.FindName("HeaderSection")).Visibility);
+            Assert.Equal(Visibility.Collapsed, Assert.IsType<Grid>(control.FindName("ManagementBar")).Visibility);
             ListBox history = Assert.IsType<ListBox>(control.FindName("HistoryList"));
             typeof(ClipboardHistoryControl)
                 .GetMethod("RefreshView", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -124,13 +160,25 @@ public sealed class ClipboardHistoryUiTests
         Dispatcher.PushFrame(frame);
     }
 
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            DependencyObject child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+
     private sealed class UiFakeAdapter : IWindowsClipboardHistoryAdapter
     {
         public event EventHandler? HistoryChanged { add { } remove { } }
         public int WriteCount { get; private set; }
+        public IReadOnlyList<ClipboardImportItem> Items { get; set; } =
+            [new ClipboardImportItem(ClipboardEntryKind.Text, DateTimeOffset.UtcNow, Text: "visual test entry")];
         public Task<ClipboardHistoryReadResult> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(
-            new ClipboardHistoryReadResult(ClipboardSyncState.Ready,
-            [new ClipboardImportItem(ClipboardEntryKind.Text, DateTimeOffset.UtcNow, Text: "visual test entry")]));
+            new ClipboardHistoryReadResult(ClipboardSyncState.Ready, Items));
         public Task<bool> WriteAsync(ClipboardHistoryEntry entry, CancellationToken cancellationToken)
         {
             WriteCount++;

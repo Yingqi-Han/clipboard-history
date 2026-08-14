@@ -3,7 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     Title="剪贴板历史"
-    Width="520" Height="700" MinWidth="420" MinHeight="480"
+    Width="400" Height="540" MinWidth="340" MinHeight="400"
     WindowStartupLocation="CenterScreen"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica">
@@ -11,7 +11,7 @@
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <ui:TitleBar x:Name="CompactTitleBar" Title="剪贴板历史"
         ShowMinimize="True" ShowMaximize="True" ShowClose="True" />
-    <Grid Grid.Row="1" Margin="22,12,22,0">
+    <Grid Grid.Row="1" Margin="14,6,14,0">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <CheckBox x:Name="TopmostToggle" Content="始终置顶" IsChecked="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=Topmost}"
           Click="TopmostToggle_Click" HorizontalAlignment="Right" Margin="0,0,0,10" />
